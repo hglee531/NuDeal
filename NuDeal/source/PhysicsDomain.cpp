@@ -451,23 +451,19 @@ void FlatXSDomain::Initialize(int ng, int scatorder, int niso) {
 
 void FlatXSDomain::SetMacroXS(const vector<int> &imag, const XSLibrary &XS)
 {
-	const auto& Micro = XS.GetMicroXS();
+	const auto& Macro = XS.GetMacroXS();
 
 	for (int i = 0; i < compileInfo.size(); ++i) {
 		int mat = compileInfo[i].idvol;
 
-		const auto& total = Micro[mat].total;
-		const auto& scat = Micro[mat].scat;
-		const auto& fis = Micro[mat].fis, &nu = Micro[mat].nu, &kappa = Micro[mat].kappa;
+		const auto& total = Macro[mat].tr;
+		const auto& scat = Macro[mat].scat;
+		const auto& nufis = Macro[mat].nufis, &kappafis = Macro[mat].kappafis;
 
 		std::copy(total.begin(), total.end(), &xst(0, i));
 		std::copy(scat.begin(), scat.end(), &xssm(0, 0, 0, i));
-		
-		for (int g = 0; g < ng; ++g) {
-			xsnf(g, i) = fis(g) * nu(g);
-			xskf(g, i) = fis(g) * kappa(g);
-		}
-
+		std::copy(nufis.begin(), nufis.end(), &xsnf(0, i));
+		std::copy(kappafis.begin(), kappafis.end(), &xskf(0, i));
 	}
 
 }
