@@ -1,6 +1,6 @@
 #pragma once
 #include "Defines.h"
-#include "Array.hpp"
+#include "Array.h"
 #include "PhysicalDomain.h"
 
 namespace Transport {

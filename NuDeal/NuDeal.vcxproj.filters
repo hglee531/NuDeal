@@ -37,12 +37,6 @@
     <Filter Include="Header\PhysicalProperty">
       <UniqueIdentifier>{72a53ef9-498d-486f-9839-ddf4f2153738}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Header\CrossSection">
-      <UniqueIdentifier>{a13ef943-3fa7-4573-87d4-ee4863844db3}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Source\CrossSection">
-      <UniqueIdentifier>{366d1306-0946-401f-a6eb-c086689abe98}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Header\Transport">
       <UniqueIdentifier>{5446f144-58dd-43e7-bf89-0d0a69303670}</UniqueIdentifier>
     </Filter>
@@ -51,6 +45,12 @@
     </Filter>
     <Filter Include="Header\TypeTraits">
       <UniqueIdentifier>{dc519317-4a61-4e49-b229-ab7708eaf6ff}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header\Library">
+      <UniqueIdentifier>{a13ef943-3fa7-4573-87d4-ee4863844db3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Library">
+      <UniqueIdentifier>{366d1306-0946-401f-a6eb-c086689abe98}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -96,12 +96,6 @@
     <ClInclude Include="header\Array.h">
       <Filter>Header\LinPack</Filter>
     </ClInclude>
-    <ClInclude Include="header\Array.hpp">
-      <Filter>Header\LinPack</Filter>
-    </ClInclude>
-    <ClInclude Include="header\XS.h">
-      <Filter>Header\CrossSection</Filter>
-    </ClInclude>
     <ClInclude Include="header\PhysicalDomain.h">
       <Filter>Header\PhysicalProperty</Filter>
     </ClInclude>
@@ -119,6 +113,15 @@
     </ClInclude>
     <ClInclude Include="header\CUDATypeTraits.h">
       <Filter>Header\TypeTraits</Filter>
+    </ClInclude>
+    <ClInclude Include="header\NuDEAL.h">
+      <Filter>Header</Filter>
+    </ClInclude>
+    <ClInclude Include="header\XSLibrary.h">
+      <Filter>Header\Library</Filter>
+    </ClInclude>
+    <ClInclude Include="header\Library.h">
+      <Filter>Header\Library</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -149,9 +152,6 @@
     <ClCompile Include="source\Main.cpp">
       <Filter>Source</Filter>
     </ClCompile>
-    <ClCompile Include="source\XS.cpp">
-      <Filter>Source\CrossSection</Filter>
-    </ClCompile>
     <ClCompile Include="source\PhysicsDomain.cpp">
       <Filter>Source\PhysicalProperty</Filter>
     </ClCompile>
@@ -160,6 +160,12 @@
     </ClCompile>
     <ClCompile Include="source\ShortCharacteristics.cpp">
       <Filter>Source\Transport</Filter>
+    </ClCompile>
+    <ClCompile Include="source\NuDEAL.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="source\XSLibrary.cpp">
+      <Filter>Source\Library</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

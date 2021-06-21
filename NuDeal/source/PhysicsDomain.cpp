@@ -1,5 +1,5 @@
 #include "PhysicalDomain.h"
-#include "Array.hpp"
+#include "XSLibrary.h"
 
 namespace PhysicalDomain {
 void BaseDomain::Create(const GeometryHandler &rhs) {
@@ -449,21 +449,27 @@ void FlatXSDomain::Initialize(int ng, int scatorder, int niso) {
 	xskf.Create(ng, nblocks);
 }
 
-void FlatXSDomain::SetMacroXS(const vector<int> &imat, const XSLib &MacroXS) {
-	const auto &XS_set = MacroXS.GetXSSet();
+void FlatXSDomain::SetMacroXS(const vector<int> &imag, const XSLibrary &XS)
+{
+	const auto& Micro = XS.GetMicroXS();
 
-	int TOT = static_cast<int>(XSType::TOT), FIS = static_cast<int>(XSType::FIS), Nu = static_cast<int>(XSType::Nu);
-	int Kappa = static_cast<int>(XSType::Kappa);
+	for (int i = 0; i < compileInfo.size(); ++i) {
+		int mat = compileInfo[i].idvol;
 
-	for (int i = 0; i < compileInfo.size(); i++) {
-		int idmat = compileInfo[i].idvol;
-		std::copy(XS_set[idmat].XSval[TOT].begin(), XS_set[idmat].XSval[TOT].end(), &xst(0,i));
-		for (int sord = 0; sord < scatorder; sord++)
-			std::copy(XS_set[idmat].XSSM[sord].begin(), XS_set[idmat].XSSM[sord].end(), &xssm(0, 0, 0, i));
-		for (int ig = 0; ig < ng; ig++) {
-			xsnf(ig, i) = XS_set[idmat].XSval[FIS](ig) * XS_set[idmat].XSval[Nu](ig);
-			if (isTHfeed) xskf(ig, i) = XS_set[idmat].XSval[FIS](ig) * XS_set[idmat].XSval[Kappa](ig);
+		const auto& total = Micro[mat].total;
+		const auto& scat = Micro[mat].scat;
+		const auto& fis = Micro[mat].fis, &nu = Micro[mat].nu, &kappa = Micro[mat].kappa;
+
+		std::copy(total.begin(), total.end(), &xst(0, i));
+		std::copy(scat.begin(), scat.end(), &xssm(0, 0, 0, i));
+		
+		for (int g = 0; g < ng; ++g) {
+			xsnf(g, i) = fis(g) * nu(g);
+			xskf(g, i) = fis(g) * kappa(g);
 		}
+
 	}
+
 }
+
 }

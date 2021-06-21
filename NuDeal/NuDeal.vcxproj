@@ -12,7 +12,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="header\Array.h" />
-    <ClInclude Include="header\Array.hpp" />
     <ClInclude Include="header\Card.h" />
     <ClInclude Include="header\CUDAExcept.h" />
     <ClInclude Include="header\CUDATypeTraits.h" />
@@ -24,7 +23,9 @@
     <ClInclude Include="header\Input.h" />
     <ClInclude Include="header\IODeclare.h" />
     <ClInclude Include="header\IOUtil.h" />
+    <ClInclude Include="header\Library.h" />
     <ClInclude Include="header\MPI.hpp" />
+    <ClInclude Include="header\NuDEAL.h" />
     <ClInclude Include="header\OMP.hpp" />
     <ClInclude Include="header\Parser.h" />
     <ClInclude Include="header\PhysicalComposition.h" />
@@ -32,10 +33,11 @@
     <ClInclude Include="header\PhysicalDomain.h" />
     <ClInclude Include="header\ShortCharacteristics.h" />
     <ClInclude Include="header\UnitGeo.h" />
-    <ClInclude Include="header\XS.h" />
+    <ClInclude Include="header\XSLibrary.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="source\Geometry.cpp" />
+    <ClCompile Include="source\NuDEAL.cpp" />
     <ClCompile Include="source\Parser.cpp" />
     <ClCompile Include="source\PhysicalComposition.cpp" />
     <ClCompile Include="source\Preprocessor.cpp" />
@@ -46,7 +48,7 @@
     <ClCompile Include="source\UnitGeo.cpp" />
     <ClCompile Include="source\Main.cpp" />
     <ClCompile Include="source\Input.cpp" />
-    <ClCompile Include="source\XS.cpp" />
+    <ClCompile Include="source\XSLibrary.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{4C24DF09-B724-4756-A70D-2B3F797526E2}</ProjectGuid>

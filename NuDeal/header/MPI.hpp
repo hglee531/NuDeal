@@ -3,6 +3,18 @@
 #include "cuda_runtime.h"
 #include <type_traits>
 
+#define mpiCheckError(error) \
+if (error != MPI_SUCCESS) { \
+	int len; char str[MPI_MAX_ERROR_STRING]; \
+	MPI::Error_string(error, str, &len); \
+	std::cout << "MPI error : " << str << std::endl; \
+	std::cout << "In file " << __FILE__ \
+		<< " line " << __LINE__ \
+		<< " func " << __func__ << std::endl; \
+	MPI::Abort(MPI_COMM_WORLD, error); \
+	::exit(EXIT_FAILURE); \
+}
+
 namespace MPI
 {
 
@@ -290,6 +302,13 @@ inline constexpr int (*Comm_create)(MPI_Comm, MPI_Group, MPI_Comm*) = MPI_Comm_c
 inline constexpr int (*Comm_split)(MPI_Comm, int, int, MPI_Comm*) = MPI_Comm_split;
 inline constexpr int (*Comm_split_type)(MPI_Comm, int, int, MPI_Info, MPI_Comm*) = MPI_Comm_split_type;
 inline constexpr int (*Comm_free)(MPI_Comm*) = MPI_Comm_free;
+
+/*---------------------------------------------*/
+/* Section 8.4: Error Codes and Classes        */
+/*---------------------------------------------*/
+
+inline constexpr int (*Error_class)(int, int*) = MPI_Error_class;
+inline constexpr int (*Error_string)(int, char*, int*) = MPI_Error_string;
 
 /*---------------------------------------------*/
 /* Section 8.7: Startup                        */

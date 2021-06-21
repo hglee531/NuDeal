@@ -54,6 +54,9 @@ public :
 	static vector<string> SplitFields(const string& line, const string& delimiter);
 	static vector<string> SplitFields(const string& line, char delimiter);
 	static double3 GetCoordinate(const string& field);
+	/// Filestream Manipulation
+	static string GetLine(istream& fin);
+	static int FindKeyword(istream& fin, const string& keyword);
 	
 	static bool IsClosed(const string& s);
 };

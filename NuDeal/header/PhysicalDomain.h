@@ -1,12 +1,15 @@
 #pragma once
 #include "Defines.h"
 #include "UnitGeo.h"
-#include "XS.h"
+#include "Library.h"
 #include "GeoHandle.h"
 #include "Array.h"
 #include "PhysicalComposition.h"
 
 namespace PhysicalDomain {
+
+template <typename T> using Array = LinPack::Array_t<T>;
+
 enum dir6 {
 	xleft, xright,
 	yleft, yright,
@@ -125,8 +128,6 @@ public:
 };
 
 class RaySegmentDomain : public ConnectedDomain {
-public:
-	template<typename T> using Array = LinPack::Array_t<T>;
 private:
 	Array<double> bndflux;
 public:
@@ -140,9 +141,6 @@ public:
 };
 
 class FlatSrcDomain : public CompiledDomain {
-public:
-	template<typename T> using Array = LinPack::Array_t<T>;
-
 // for neutronics
 private:
 	Array<double> flux;
@@ -161,9 +159,7 @@ public:
 
 class FlatXSDomain : public CompiledDomain {
 public:
-	template <typename T> using Array = LinPack::Array_t<T>;
-	using XSLib = XS::XSLib;
-	using XSType = XS::XSType;
+	using XSLibrary = Library::XSLibrary_t;
 
 private:
 	bool isMicro;
@@ -183,7 +179,7 @@ public:
 
 	void Initialize(int ng, int scatorder, int niso);
 
-	void SetMacroXS(const vector<int> &imat, const XSLib &MacroXS);
+	void SetMacroXS(const vector<int> &imag, const XSLibrary &XS);
 
 	int GetScatOrder() const { return scatorder; }
 	const auto& GetTotalXS() const { return xst; }

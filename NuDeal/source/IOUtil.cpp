@@ -146,4 +146,37 @@ bool Util_t::IsClosed(const string& s)
 	return (lcount == rcount) && (lcount > 0);
 }
 
+string Util_t::GetLine(istream& fin)
+{
+	string line;
+
+	do {
+
+		std::getline(fin, line);
+		std::replace(line.begin(), line.end(), SC::Tab, SC::Blank);
+		std::replace(line.begin(), line.end(), SC::CR, SC::Blank);
+
+		line = Trim(line);
+
+	} while (line.empty());
+
+	return line;
+}
+
+int Util_t::FindKeyword(istream& fin, const string& keyword)
+{
+	int count = 0;
+	auto pos = fin.tellg();
+	fin.clear(); fin.seekg(ios::beg);
+	while (!fin.eof()) {
+		string field; fin >> field;
+		if (Uppercase(field) == keyword) {
+			if (!count) pos = fin.tellg();
+			++count;
+		}
+	}
+	fin.clear(); fin.seekg(pos);
+	return count;
+}
+
 }
