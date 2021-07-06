@@ -17,7 +17,6 @@ struct ThermoHydroMat_t {
 	double k_c, h_t;
 };
 struct Boundary_t {
-	double3 normal;
 	// 0 : vacuum, 1 : reflective w fraction, 2 : white w fraction, 3 : zero-flux
 	// 4 : checker board, 5 : rotational
 	int BaseType; 

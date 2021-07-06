@@ -91,7 +91,7 @@ public:
 
 	XSLibrary_t() noexcept = default;
 
-	void ReadMacro(const string& file = "./lib/c5g7.xslib");
+	void ReadMacro(const string& file = "./lib/2group.xslib");
 	void ReadMicro();
 
 public:
@@ -101,6 +101,9 @@ public:
 
 	bool IsMacro() const { return format == Format::Macro; }
 	bool IsMicro() const { return format == Format::Micro; }
+
+	int GetNumGroup() const { return num_groups; }
+	int GetScatOrder() const { return scat_order; }
 };
 
 }

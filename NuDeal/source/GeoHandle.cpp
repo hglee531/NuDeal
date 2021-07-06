@@ -199,7 +199,7 @@ int GeometryHandler::FindVolId(double3 ptL, double3 ptR, bool lowest) {
 		//if (Volumes[idvol].IsInside(xmid, ymid, zmid, false)) return idvol;
 		if (!Volumes[idvol].IsInside(xmid, ymid, zmid, true)) VolInBound[i] = -1;
 	}
-	int imax = -100; double volmin = 1.e+10;
+	int imax = -100; double volmin = 1.e+50;
 	for (int i = 0; i < nbnd; i++) {
 		int idvol = VolInBound[i];
 		if (idvol > -1) {
@@ -398,6 +398,13 @@ bool GeometryHandler::Discretize(Dimension Dim, double minlen, double maxlen, in
 	}
 	std::fill(nnodeLv.begin(), nnodeLv.end(), 0);
 	RecordDiscInfo(-1, root);
+
+	nnode = 0;
+	for (auto it = info.begin(); it != info.end(); it++) {
+		for (auto jt = (*it).begin(); jt != (*it).end(); jt++) {
+			if (jt->idvol > -1) nnode++;
+		}
+	}
 
 	cout << "Discretize Done!" << endl;
 

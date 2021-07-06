@@ -165,6 +165,8 @@ public:
 		this->vol = rhs.GetVolume();
 		return *this;
 	}
+
+	UnitVol& operator<<(const UnitSurf &asurf) { Append(asurf); return *this; }
 };
 
 inline void DebugUnitGeo() {
@@ -219,7 +221,7 @@ public:
 	void Create(int nvol, const UnitVol &Volume);
 	void Create(const UnitComp& rhs);
 
-	const auto& GetMatId() const { return imat; }
+	int GetMatId() const { return imat; }
 };
 
 }

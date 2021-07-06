@@ -2,6 +2,16 @@
 #include "Defines.h"
 #include "UnitGeo.h"
 
+/*
+  The boundary conditions are not treated.
+	It is so complicating works for me and for now.
+	If sometime it is applied,
+	(1) Boundary surface definition in UnitGeo.h
+	(2) B.S search for zero-level nodes with the normal vector calculation
+	(3) Weights for reflective-B.C integration in AngularQuadrature class
+	(4) Update boundary fluxes in xbndflux, ybndflux, zbndflux in BoundarySurface class
+*/
+
 namespace Geometry {
 
 constexpr double mintau_default = 0.01;
@@ -100,6 +110,8 @@ public:
 	void append(UnitVol &avol, int matid) { UVbuf.push(avol); matidbuf.push(matid); }
 
 	void append(UnitComp &acomp);
+
+	GeometryHandler& operator<<(UnitComp &acomp) { append(acomp); return *this; }
 
 	void Create(int ncomp, UnitComp *Comps) { for (int i = 0; i < ncomp; i++) append(Comps[i]); }
 

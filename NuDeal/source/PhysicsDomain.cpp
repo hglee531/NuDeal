@@ -11,7 +11,7 @@ void BaseDomain::Create(const GeometryHandler &rhs) {
 
 		Nx = N.x; Ny = N.y; Nz = N.z;
 		x0 = origin.x; y0 = origin.y; z0 = origin.z;
-		lx0 = Width0.x; ly0 = Width0.y; lz0 = Width0.x;
+		lx0 = Width0.x; ly0 = Width0.y; lz0 = Width0.z;
 		nx = 3; ny = (mode != Dimension::OneD) ? 3 : 1; nz = (mode == Dimension::ThreeD) ? 3 : 1;
 		nnodeLv.resize(divlevel); upperdivmap.resize(divlevel); lowerdivmap.resize(divlevel - 1);
 		serialdivmap.resize(divlevel); nodeInfo.resize(nnode); innodeLv.resize(nnode);
@@ -236,6 +236,156 @@ void ConnectedDomain::PrintConnectInfo() const {
 		}
 	}
 
+void RayTracingDomain::RecursiveTrace(array<queue<int2>, 8> &Qsweeploop, int Lv, int id, int &iternode, int Oct) {
+	for (int iz = range[Oct][0].z; iz != range[Oct][1].z; iz += dxyz[Oct].z) {
+		for (int iy = range[Oct][0].y; iy != range[Oct][1].y; iy += dxyz[Oct].y) {
+			for (int ix = range[Oct][0].x; ix != range[Oct][1].x; ix += dxyz[Oct].x) {
+				int thisid = id + ix + (iy + iz * ny) * nx;
+				int lowid0 = 0, lowid1 = 0;
+				if (Lv < divlevel - 1) lowid0 = lowerdivmap[Lv][thisid], lowid1 = lowerdivmap[Lv][thisid + 1];
+
+				if (lowid0 < lowid1) {
+					Qsweeploop[Oct].push(make_int2(iternode, 0));
+					nloop[Oct]++;
+					RecursiveTrace(Qsweeploop, Lv + 1, lowid0 + edgeid[Oct], iternode, Oct);
+				}
+				else {
+					sweepnodes(iternode, Oct) = serialdivmap[Lv][thisid];
+					sweepIdInBox(iternode, Oct) = thisid;
+					iternode++;
+				}
+			} 
+			Qsweeploop[Oct].push(make_int2(iternode, 1));
+			nloop[Oct]++;
+		}
+		Qsweeploop[Oct].back().y = 2;
+	}
+	Qsweeploop[Oct].back().y = 3;
+}
+
+void RayTracingDomain::SetTraceOrder(array<queue<int2>, 8> &Qsweeploop) {
+	std::fill(nloop, nloop + 8, 0);
+
+	for (int Oct = 0; Oct < 8; Oct++) {
+		int iternode = 0;
+		Qsweeploop[Oct].push(make_int2(0, -1));
+		for (int iz = range0[Oct][0].z; iz != range0[Oct][1].z; iz += dxyz[Oct].z) {
+			for (int iy = range0[Oct][0].y; iy != range0[Oct][1].y; iy += dxyz[Oct].y) {
+				for (int ix = range0[Oct][0].x; ix != range0[Oct][1].x; ix += dxyz[Oct].x) {
+					int thisLv = 0, thisid = ix + (iy + iz * Ny) * Nx;
+					int lowid0 = 0, lowid1 = 0;
+					if (divlevel > 1) lowid0 = lowerdivmap[thisLv][thisid], lowid1 = lowerdivmap[thisLv][thisid + 1];
+
+					if (lowid0 < lowid1) {
+						Qsweeploop[Oct].push(make_int2(iternode, 0));
+						nloop[Oct]++; 
+						RecursiveTrace(Qsweeploop, thisLv + 1, lowid0, iternode, Oct);
+					}
+					else {
+						sweepnodes(iternode, Oct) = serialdivmap[thisLv][thisid];
+						sweepIdInBox(iternode, Oct) = thisid;
+						iternode++;
+					}
+				}
+				Qsweeploop[Oct].push(make_int2(iternode, 1));
+				nloop[Oct]++;
+			}
+			Qsweeploop[Oct].back().y = 2;
+		}
+		Qsweeploop[Oct].back().y = 3;
+	}
+}
+
+void RayTracingDomain::CreateTracingDomain() {
+	array<queue<int2>, 8> Qsweeploop;
+
+	sweepnodes.Create(nnode, 8);
+	sweepIdInBox.Create(nnode, 8);
+
+	for (int Oct = 0; Oct < 8; Oct++) {
+		int dx = (Oct % 2) ? -1 : 1, dy = (Oct % 4 / 2) ? -1 : 1, dz = (Oct / 4) ? -1 : 1;
+		dxyz[Oct] = make_int3(dx, dy, dz);
+
+		int xs0[2], ys0[2], zs0[2], xs[2], ys[2], zs[2];
+
+		if (dx > 0) { xs0[0] = 0; xs0[1] = Nx; xs[0] = 0; xs[1] = nx; }
+		else { xs0[0] = Nx - 1; xs0[1] = -1; xs[0] = nx - 1; xs[1] = -1; }
+		if (dy > 0) { ys0[0] = 0; ys0[1] = Ny; ys[0] = 0; ys[1] = ny; }
+		else { ys0[0] = Ny - 1; ys0[1] = -1; ys[0] = ny - 1; ys[1] = -1; }
+		if (dz > 0) { zs0[0] = 0; zs0[1] = Nz; zs[0] = 0; zs[1] = nz; }
+		else { zs0[0] = Nz - 1; zs0[1] = -1; zs[0] = nz - 1; zs[1] = -1; }
+
+		edgeid[Oct] = xs[0] + (ys[0] + zs[0] * Ny) * Nx;
+
+		range0[Oct][0] = make_int3(xs0[0], ys0[0], zs0[0]); range[Oct][0] = make_int3(xs[0], ys[0], zs[0]);
+		range0[Oct][1] = make_int3(xs0[1], ys0[1], zs0[1]); range[Oct][1] = make_int3(xs[1], ys[1], zs[1]);
+	}
+
+	SetTraceOrder(Qsweeploop);
+
+	sweeploop.Create(Qsweeploop[0].size(), 8);
+	for (int Oct = 0; Oct < 8; Oct++) {
+		int size = Qsweeploop[Oct].size();
+		for (int i = 0; i < size; i++) {
+			sweeploop(i, Oct) = Qsweeploop[Oct].front();
+			Qsweeploop[Oct].pop();
+		}
+	}
+
+	PrintTracingInfo();
+}
+
+void RayTracingDomain::PrintTracingInfo() {
+	ofstream traceout("Tracing.out");
+	for (int Oct = 0; Oct < 8; Oct++) {
+		traceout << "Octant : " << Oct << endl;
+
+		int size = sweeploop.size() / 8, thisLv = 0;
+		for (int iloop = 0; iloop < size - 1; iloop++) {
+			int ibeg = sweeploop(iloop, Oct).x;
+			int iend = sweeploop(iloop + 1, Oct).x, storedir = sweeploop(iloop + 1, Oct).y;
+
+			if (storedir == 0) {
+				for (int i = 0; i < thisLv; i++) traceout << '\t';
+				thisLv++;
+				traceout << "Enter(Lv) : " << thisLv << endl;
+			}
+
+			if (ibeg < iend)
+				for (int i = 0; i < thisLv; i++) traceout << '\t';
+
+			for (int inode = ibeg; inode < iend; inode++) {
+				traceout << sweepnodes(inode, Oct) << ' ';
+			}
+
+			if (ibeg < iend) traceout << endl;
+
+			switch (storedir)
+			{
+			case 1:
+				for (int i = 0; i < thisLv; i++) traceout << '\t';
+				traceout << "Record fluxes in X..." << endl;
+				break;
+			case 2:
+				for (int i = 0; i < thisLv; i++) traceout << '\t';
+				traceout << "Record fluxes in y..." << endl;
+				break;
+			case 3:
+				for (int i = 0; i < thisLv; i++) traceout << '\t';
+				traceout << "Record fluxes in z..." << endl;
+				thisLv--;
+				for (int i = 0; i < thisLv; i++) traceout << '\t';
+				traceout << "Exit(Lv) : " << thisLv << endl;
+				break;
+			default:
+				break;
+			}
+		}
+
+		traceout << endl;
+	}
+}
+
 void CompiledDomain::Decompile() {
 		for (int j = 0; j < compileInfo.size(); j++) {
 			for (int i = 0; i < compileInfo[j].inodes.size(); i++) {
@@ -369,10 +519,10 @@ CompiledDomain::CompiledDomain(int3 block, const CompiledDomain &rhs) {
 		for (int iy = 0; iy < By; iy++) {
 		for (int ix = 0; ix < Bx; ix++) {
 			vector<int> ivolsInBlock;
-			for (int jz = 0; jz < block.z; jz++) {
-			for (int jy = 0; jy < block.y; jy++) {
-			for (int jx = 0; jx < block.x; jx++) {
-				int id0 = (jx + ix * block.x) + Bxr * (jy + iy * block.y + Byr * (jz + iz * block.z));
+			for (int jz = 0; jz < divz; jz++) {
+			for (int jy = 0; jy < divy; jy++) {
+			for (int jx = 0; jx < divx; jx++) {
+				int id0 = (jx + ix * divx) + Bxr * (jy + iy * divy + Byr * (jz + iz * divz));
 
 				for (int inlow = compilemapr[id0]; inlow < compilemapr[id0 + 1]; inlow++) {
 					double volcm3 = compileInfor[inlow].volsum;
@@ -422,22 +572,203 @@ void CompiledDomain::PrintCompileInfo(string filename) const {
 		cout << "Compile Info Printed Out!" << endl;
 	}
 
-void RaySegmentDomain::Initialize(int ng, int nangle_oct) { 
-	bndflux.Create(ng, 2 * nangle_oct, 2 * (Nx*Ny + Ny*Nz + Nx*Nz)); 
+void FluxBoundary::Initialize(int ng, int nangle_oct) {
+	this->ng = ng; this->nangle_oct = nangle_oct;
+	xbndflux.Create(ng, nangle_oct, Ny*Nz, 8);
+	ybndflux.Create(ng, nangle_oct, Nx*Nz, 8);
+	zbndflux.Create(ng, nangle_oct, Nx*Ny, 8);
 }
 
-void FlatSrcDomain::Initialize(int ng, int scatorder, bool isEx) {
+void  FluxBoundary::VaccumFlux() {
+	std::fill(xbndflux.begin(), xbndflux.end(), 0.0);
+	std::fill(ybndflux.begin(), ybndflux.end(), 0.0);
+	std::fill(zbndflux.begin(), zbndflux.end(), 0.0);
+}
+
+void  FluxBoundary::InitBndFluxUnity() {
+	std::fill(xbndflux.begin(), xbndflux.end(), 1.0);
+	std::fill(ybndflux.begin(), ybndflux.end(), 1.0);
+	std::fill(zbndflux.begin(), zbndflux.end(), 1.0);
+}
+
+void FluxBoundary::UpdateBoundary(int leftcond, int rightcond) {
+	if (leftcond + rightcond == 0) {
+		VaccumFlux();
+		return;
+	}
+
+	bool isxl, isxr, isyl, isyr, iszl, iszr;
+	isxl = leftcond / 100; isxr = rightcond / 100;
+	isyl = leftcond / 10 % 10; isyr = rightcond / 10 % 10;
+	iszl = leftcond % 10; iszr = rightcond % 10;
+		
+	Array<double> bufx, bufy, bufz;
+	bufx = xbndflux; bufy = ybndflux; bufz = zbndflux;
+	
+	if (isxl) {
+		int octl[4] = { 0, 2, 4, 6 };
+		int octr[4] = { 1, 3, 5, 7 };
+		for (int Oct = 0; Oct < 4; Oct++) {
+			int octout = octr[Oct], octin = octl[Oct];
+			std::copy(&bufx(0, 0, 0, octout), &bufx(0, 0, 0, octout + 1), &xbndflux(0, 0, 0, octin));
+		}
+	}
+	if (isxr) {
+		int octr[4] = { 0, 2, 4, 6 };
+		int octl[4] = { 1, 3, 5, 7 };
+		for (int Oct = 0; Oct < 4; Oct++) {
+			int octout = octr[Oct], octin = octl[Oct];
+			std::copy(&bufx(0, 0, 0, octout), &bufx(0, 0, 0, octout + 1), &xbndflux(0, 0, 0, octin));
+		}
+	}
+
+	if (isyl) {
+		int octl[4] = { 0, 1, 4, 5 };
+		int octr[4] = { 2, 3, 6, 7 };
+		for (int Oct = 0; Oct < 4; Oct++) {
+			int octout = octr[Oct], octin = octl[Oct];
+			std::copy(&bufy(0, 0, 0, octout), &bufy(0, 0, 0, octout + 1), &ybndflux(0, 0, 0, octin));
+		}
+	}
+	if (isyr) {
+		int octr[4] = { 0, 1, 4, 5 };
+		int octl[4] = { 2, 3, 6, 7 };
+		for (int Oct = 0; Oct < 4; Oct++) {
+			int octout = octr[Oct], octin = octl[Oct];
+			std::copy(&bufy(0, 0, 0, octout), &bufy(0, 0, 0, octout + 1), &ybndflux(0, 0, 0, octin));
+		}
+	}
+
+	if (iszl) {
+		int octl[4] = { 0, 1, 2, 3 };
+		int octr[4] = { 4, 5, 6, 7 };
+		for (int Oct = 0; Oct < 4; Oct++) {
+			int octout = octr[Oct], octin = octl[Oct];
+			std::copy(&bufz(0, 0, 0, octout), &bufz(0, 0, 0, octout + 1), &zbndflux(0, 0, 0, octin));
+		}
+	}
+	if (iszr) {
+		int octr[4] = { 0, 1, 2, 3 };
+		int octl[4] = { 4, 5, 6, 7 };
+		for (int Oct = 0; Oct < 4; Oct++) {
+			int octout = octr[Oct], octin = octl[Oct];
+			std::copy(&bufz(0, 0, 0, octout), &bufz(0, 0, 0, octout + 1), &zbndflux(0, 0, 0, octin));
+		}
+	}
+	
+}
+
+void FlatSrcDomain::Initialize(int ng, int nangle_octant, int scatorder, bool isEx) {
+	this->ng = ng; this->nangle_oct = nangle_octant;
+	this->scatorder = scatorder; this->isEx = isEx;
 	flux.Create(ng, nblocks, (scatorder + 1) * (scatorder + 1));
-	srcS(ng, nblocks);
-	srcF.Create(ng, nblocks);
-	if (isEx) srcEx.Create(ng, nblocks);
+	psi.Create(nblocks);
+	src.Create(ng, nangle_octant, nblocks, 8);
+	srcS.Create(ng, nangle_octant, nblocks, 8);
+	if (isEx) srcEx.Create(ng, nangle_octant, nblocks, 8);
+}
+
+double FlatSrcDomain::UpdateFisSource(const FlatXSDomain &FXR) {
+	using Math::square;
+
+	const vector<int> &idFXR = FXR.GetDecompileId();
+	const Array<double> &xsnf = FXR.GetNuFisXS();
+
+	double norm0, norm1;
+	norm0 = norm1 = 0;
+
+	for (int i = 0; i < nblocks; i++) {
+		double voli = compileInfo[i].volsum;
+
+		//double psi0 = psi(i);
+		double psi0 = psi(i) * voli;
+
+		psi(i) = 0.0;
+
+		int iFXR = idFXR[i];
+		for (int ig = 0; ig < ng; ig++)
+			psi(i) += flux(ig, i) * xsnf(ig, iFXR);
+		
+		//norm0 += square(psi(i));
+		//norm1 += psi(i) * psi0;
+		norm0 += square(psi(i) * voli);
+		norm1 += psi(i) * voli * psi0;
+	}
+
+	return norm0 / norm1;
+}
+
+void FlatSrcDomain::NormalizePsi(double keff) {
+	for (auto it = psi.begin(); it < psi.end(); it++) (*it) /= keff;
+}
+
+void FlatSrcDomain::AccumulateSource(const vector<int> &idFXR, const Array<double> &chi) {
+	using Math::PI;
+	for (int i = 0; i < nblocks; i++) {
+		int iFXR = idFXR[i];
+		for (int ig = 0; ig < ng; ig++) {
+			double sf = psi(i) * chi(ig, iFXR) / PI * 0.25;
+			for (int Oct = 0; Oct < 8; Oct++) {
+				for (int iang = 0; iang < nangle_oct; iang++) {
+					src(ig, iang, i, Oct) = sf + srcS(ig, iang, i, Oct);
+				}
+			}
+		}
+	}
+	if (isEx)
+		for (int i = 0; i < src.size(); i++) src(i) += srcEx(i);
+}
+
+void FlatSrcDomain::UpdateScatSource(const FlatXSDomain &FXR) {
+	using Math::PI;
+	const vector<int> &idFXR = FXR.GetDecompileId();
+	const Array<double> &xssm = FXR.GetScatMatrix();
+
+	std::fill(srcS.begin(), srcS.end(), 0.0);
+
+	for (int i = 0; i < nblocks; i++) {
+		int iFXR = idFXR[i];
+		for (int ig = 0; ig < ng; ig++)
+			for (int igg = 0; igg < ng; igg++) {
+				double ss = flux(ig, i) * xssm(igg, ig, 0, iFXR) / PI * 0.25;
+
+				for (int Oct = 0; Oct < 8; Oct++)
+					for (int iangle = 0; iangle < nangle_oct; iangle++)
+						srcS(igg, iangle, i, Oct) += ss;
+			}
+	}
+}
+
+void FlatSrcDomain::UpdateAngularSource(const FlatXSDomain &FXR) {
+	using Math::PI;
+	const vector<int> &idFXR = FXR.GetDecompileId();
+	const Array<double> &xssm = FXR.GetScatMatrix();
+
+	std::fill(srcS.begin(), srcS.end(), 0.0);
+
+	for (int i = 0; i < nblocks; i++) {
+		int iFXR = idFXR[i];
+
+		for (int ig = 0; ig < ng; ig++)
+			for (int igg = 0; igg < ng; igg++) {
+				double ss = flux(ig, i) * xssm(igg, ig, 0, iFXR) / PI * 0.25;
+
+				for (int Oct = 0; Oct < 8; Oct++)
+					for (int iangle = 0; iangle < nangle_oct; iangle++)
+						srcS(igg, iangle, i, Oct) += ss;
+			}
+	}
+
+	const Array<double> &chi = FXR.GetFisSpectrum();
+	AccumulateSource(idFXR, chi);
 }
 
 void FlatXSDomain::InitializeMacro(int ng, int scatorder, bool isTHfeed) {
 	this->ng = ng; this->scatorder = scatorder;
 	isMicro = false; this->isTHfeed = isTHfeed;
 	if (isTHfeed) temperature.Create(nblocks);
-	xst.Create(ng, nblocks); xssm.Create(ng, ng, nblocks, scatorder+1); xsnf.Create(ng, nblocks);
+	xst.Create(ng, nblocks); xssm.Create(ng, ng, scatorder+1, nblocks); 
+	xsnf.Create(ng, nblocks); chi.Create(ng, nblocks);
 	if (isTHfeed) xskf.Create(ng, nblocks);
 }
 
@@ -449,21 +780,23 @@ void FlatXSDomain::Initialize(int ng, int scatorder, int niso) {
 	xskf.Create(ng, nblocks);
 }
 
-void FlatXSDomain::SetMacroXS(const vector<int> &imag, const XSLibrary &XS)
+void FlatXSDomain::SetMacroXS(const XSLibrary &XS, const vector<int> imat)
 {
 	const auto& Macro = XS.GetMacroXS();
 
 	for (int i = 0; i < compileInfo.size(); ++i) {
-		int mat = compileInfo[i].idvol;
+		int mat = imat[compileInfo[i].idvol];
 
 		const auto& total = Macro[mat].tr;
 		const auto& scat = Macro[mat].scat;
 		const auto& nufis = Macro[mat].nufis, &kappafis = Macro[mat].kappafis;
+		const auto& chi = Macro[mat].chi;
 
 		std::copy(total.begin(), total.end(), &xst(0, i));
 		std::copy(scat.begin(), scat.end(), &xssm(0, 0, 0, i));
 		std::copy(nufis.begin(), nufis.end(), &xsnf(0, i));
-		std::copy(kappafis.begin(), kappafis.end(), &xskf(0, i));
+		std::copy(chi.begin(), chi.end(), &this->chi(0, i));
+		if (isTHfeed) std::copy(kappafis.begin(), kappafis.end(), &xskf(0, i));
 	}
 
 }

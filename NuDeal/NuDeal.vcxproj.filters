@@ -52,6 +52,12 @@
     <Filter Include="Source\Library">
       <UniqueIdentifier>{366d1306-0946-401f-a6eb-c086689abe98}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Header\Solution">
+      <UniqueIdentifier>{de8f0c34-4e94-4443-a03b-db2761c48bee}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Solution">
+      <UniqueIdentifier>{01ab922b-0e28-4ca9-a359-defe8c6bd07a}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="header\HardCodeParam.h">
@@ -123,6 +129,12 @@
     <ClInclude Include="header\Library.h">
       <Filter>Header\Library</Filter>
     </ClInclude>
+    <ClInclude Include="header\SolutionDriver.h">
+      <Filter>Header\Solution</Filter>
+    </ClInclude>
+    <ClInclude Include="header\Math.hpp">
+      <Filter>Header</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="source\Input.cpp">
@@ -166,6 +178,9 @@
     </ClCompile>
     <ClCompile Include="source\XSLibrary.cpp">
       <Filter>Source\Library</Filter>
+    </ClCompile>
+    <ClCompile Include="source\SolutionDriver.cpp">
+      <Filter>Source\Solution</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>
