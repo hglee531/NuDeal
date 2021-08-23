@@ -135,6 +135,9 @@
     <ClInclude Include="header\Math.hpp">
       <Filter>Header</Filter>
     </ClInclude>
+    <ClInclude Include="header\SolutionDefines.h">
+      <Filter>Header\Transport</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="source\Input.cpp">

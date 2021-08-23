@@ -1,5 +1,6 @@
 #pragma once
 #include "Defines.h"
+#include "SolutionDefines.h"
 #include "Array.h"
 #include "PhysicalDomain.h"
 
@@ -30,7 +31,11 @@ inline int CalNangleOct(AngQuadType quadtype, vector<int> parameters) {
 	case Transport::AngQuadType::GC:
 		break;
 	case Transport::AngQuadType::Bi3:
+	{
+		int nazi = parameters[0], npolar = parameters[1];
+		nangle_oct = nazi * npolar;
 		break;
+	}
 	case Transport::AngQuadType::G_Bi3:
 		break;
 	case Transport::AngQuadType::QR:
@@ -81,7 +86,7 @@ inline double Avg_DD(double flux0, double flux1) {
 	return 0.5 * (flux0 + flux1);
 }
 
-class DriverSCMOC{
+class DriverSN{
 	template <typename T> using Array = LinPack::Array_t<T>;
 	using RaySegment = PhysicalDomain::RayTracingDomain;
 	using Boundary = PhysicalDomain::FluxBoundary;
@@ -98,6 +103,8 @@ private:
 	int ng, scatorder;
 	int ntotGnAng;
 	array<int, 8> edgemod;
+	array<int3, 8> edgeidx0, edgeidx;
+	array<int3, 8> dxyz;
 
 	int3 Nxyz, nxyz;
 	double3 lxyz0;
@@ -112,15 +119,24 @@ private:
 
 	Array<double> trackL; // trackL[nangle_oct]
 	double3 wtIF;
+	vector<double3> wtVol;
 	Array<double> wtAband, wtVband; // (3,3,3) per angle. for v,u = x,y,z, (v,u-rectangle), (v,u-parallelogram), (v,u-triangle)
 	Array<double> trackLband;
-	//vector<double> wtIF; // wtIF[3]
-	//Array<double> wtIF; // weights from interfaces along x,y,z axes, wtIF[nangle_oct][3]
+
+	Array<double> wtbandP[2][2], wtbandT[2][2]; // (exp order, nangle)
+	double3 areaIF, LsqrIF;
+	vector<double> VBand;
+	vector<double3> rnLxyz, Lpnxyz;
+	double3 rnsqrxyz;
+	
+	int bandrank;
+	double3 rnxyz;
+	bool isY, isZ;
 
 	Array<double> *scalarflux;
 	const Array<double> *src;
 	const Array<double> *xst;
-	Array<double> *xbndflux, *ybndflux, *zbndflux;
+	Array<realphi> *xbndflux, *ybndflux, *zbndflux;
 
 	int nFXR, nFSR;
 	vector<int> idFXR;
@@ -128,16 +144,18 @@ private:
 	const double *wFSR;
 
 private:
-	inline void AvgInFlux(double *outx, double *outy, double *outz, double *avgin) {
+	inline void AvgInFlux(int iangle, double *outx, double *outy, double *outz, vector<double> &avgfluxIF,  vector<double> &avgfluxVol) {
 		for (int ig = 0; ig < ng; ig++) {
-			avgin[ig] = wtIF.x * outx[ig] + wtIF.y * outy[ig] + wtIF.z * outz[ig];
+			avgfluxIF[ig] = wtIF.x * outx[ig]; avgfluxVol[ig] = wtVol[iangle].x * outx[ig];
+			if (isY) { avgfluxIF[ig] += wtIF.y * outy[ig]; avgfluxVol[ig] += wtVol[iangle].y * outy[ig]; }
+			if (isZ) { avgfluxIF[ig] += wtIF.z * outz[ig]; avgfluxVol[ig] += wtVol[iangle].z * outz[ig]; }
 		}
 	}
 
-	inline void TrackAnode(int iangle, int thisLv, int iFXR, int iFSR, double wtFSR, double *angflux, const double *src) {
+	inline void TrackAnode(int iangle, int thisLv, int iFXR, int iFSR, double wtFSR, double *angflux, vector<double> &avgfluxIF, vector<double> &avgfluxVol, const double *src) {
 		for (int ig = 0; ig < ng; ig++) {
 			double sigT = (*xst)(ig, iFXR);
-			double angflux0 = angflux[ig], srcflux = src[ig] / sigT;
+			double angflux0[2] = { avgfluxIF[ig], avgfluxVol[ig] }, srcflux = src[ig] / sigT;
 
 			double tau[2] = { 
 				trackL(0, iangle, thisLv) * sigT,
@@ -151,8 +169,8 @@ private:
 				(1. - Exponent.ExpFast(-tau[1])) / tau[1],
 			};
 
-			angflux[ig] = angflux0 * rates[0] + srcflux * (1. - rates[0]);
-			(*scalarflux)(ig, iFSR) += (angflux0 * rates[1] + srcflux * (1. - rates[1])) * wtFSR * QuadSet.weights[iangle];
+			angflux[ig] = angflux0[0] * rates[0] + srcflux * (1. - rates[0]);
+			(*scalarflux)(ig, iFSR) += (angflux0[1] * rates[1] + srcflux * (1. - rates[1])) * wtFSR * QuadSet.weights[iangle];
 
 			//angflux[ig] = srcflux + (angflux0 - srcflux) * exp(-tau);// Exponent.ExpFast(-tau);
 			//(*scalarflux)(ig, iFSR) += Avg_Step(angflux0, angflux[ig], tau, srcflux) * wtFSR * QuadSet.weights[iangle];
@@ -165,42 +183,42 @@ private:
 		}
 	}
 
-	inline void TrackBands(int iangle, int thisLv, int iFXR, int iFSR, double wtFSR, double *xflux, double *yflux, double *zflux, const double *src) {
-		constexpr double r6 = 0.1666666666666666666666666666666667;
+	void TrackBands(int iangle, int thisLv, int iFXR, int iFSR, double wtFSR, double *xflux, double *yflux, double *zflux, const double *src) {
+		constexpr double r6 = 1. / 6.;
+		double Len = trackLband(iangle, thisLv);
 		for (int ig = 0; ig < ng; ig++) {
 			double sigT = (*xst)(ig, iFXR);
-			double tau = trackLband(iangle, thisLv) * sigT;
-			double srcflux = src[ig] / sigT;
-			double flux0[3] = { xflux[ig], yflux[ig], zflux[ig] };
+			double tau = Len * sigT;
+			//double srcflux = src[ig] / sigT;
+			double srcflux = src[ig] * Len;
+			double flux0[3] = { xflux[ig], (isY ? yflux[ig] : 0.0), (isZ ? zflux[ig] : 0.0) };
 
-			//double exptau = exp(-tau);
-			double exptau = Exponent.ExpFast(-tau);
-			exptau = exp(-tau);
-			
-			double lossrate[3], srcloss[3];
-			lossrate[0] = exptau; lossrate[1] = (1. - lossrate[0]) / tau; lossrate[2] = (1. - lossrate[1]) / tau;
-			srcloss[0] = 1. - exptau; srcloss[1] = 1. - srcloss[0] / tau; srcloss[2] = 0.5 - srcloss[1] / tau;
+			double exptau = exp(-tau);
+			//double exptau = Exponent.ExpFast(-tau);
 
-			double accrate[3], srcacc[3];
-			accrate[0] = (1. - lossrate[0]) / tau; accrate[1] = (1. - accrate[0]) / tau; accrate[2] = (0.5 - accrate[1]) / tau;
-			srcacc[0] = 1. - srcloss[0] / tau; srcacc[1] = 0.5 - srcacc[0] / tau; srcacc[2] = r6 - srcacc[1] / tau;
+			double reducedexp[5];
+			reducedexp[0] = exptau;
+			reducedexp[1] = (1. - exptau) / tau;
+			reducedexp[2] = (1. - reducedexp[1]) / tau;
+			reducedexp[3] = (0.5 - reducedexp[2]) / tau;
+			reducedexp[4] = (r6 - reducedexp[3]) / tau;
 
 			double flux1[3] = { 0.0, 0.0, 0.0 };
 
-			for (int outdir = 0; outdir < 3; outdir++) {
-				for (int indir = 0; indir < 3; indir++) {
+			for (int outdir = 0; outdir < bandrank; outdir++) {
+				for (int indir = 0; indir < bandrank; indir++) {
 					double totalloss = 0., totalacc = 0.;
-					for (int band = 0; band < 3; band++) {
-						totalloss += lossrate[band] * wtAband(band, outdir, indir, iangle);
-						totalacc  += accrate[band]  * wtVband(band, outdir, indir, iangle);
+					for (int band = 0; band < bandrank; band++) {
+						totalloss += reducedexp[band] * wtAband(band, outdir, indir, iangle);
+						totalacc  += reducedexp[band+1]  * wtVband(band, outdir, indir, iangle);
 					}
 					flux1[outdir] += flux0[indir] * totalloss;
 					(*scalarflux)(ig, iFSR) += flux0[indir] * totalacc * wtFSR * QuadSet.weights[iangle];
 
 					totalloss = totalacc = 0.;
-					for (int band = 0; band < 3; band++) {
-						totalloss += srcloss[band] * wtAband(band, outdir, indir, iangle);
-						totalacc  += srcacc[band]  * wtVband(band, outdir, indir, iangle);
+					for (int band = 0; band < bandrank; band++) {
+						totalloss += reducedexp[band+1] * wtAband(band, outdir, indir, iangle);
+						totalacc  += reducedexp[band+2]  * wtVband(band, outdir, indir, iangle);
 					}
 					flux1[outdir] += srcflux * totalloss;
 					(*scalarflux)(ig, iFSR) += srcflux * totalacc * wtFSR * QuadSet.weights[iangle];
@@ -208,57 +226,199 @@ private:
 				//(*scalarflux)(ig, iFSR) += r6*(flux1[outdir] + flux0[outdir])*wtFSR*QuadSet.weights[iangle];
 			}
 
-			xflux[ig] = flux1[0]; yflux[ig] = flux1[1]; zflux[ig] = flux1[2];
+			//double meanflux = flux1[0] * wtIF.x + flux1[1] * wtIF.y + flux1[2] * wtIF.y;
+			//xflux[ig] = meanflux;
+			//if (isY) yflux[ig] = meanflux;
+			//if (isZ) zflux[ig] = meanflux;
+
+			xflux[ig] = flux1[0]; 
+			if (isY) yflux[ig] = flux1[1];
+			if (isZ) zflux[ig] = flux1[2];
+		}
+	}
+
+	void TrackBands(int iangle, int thisLv, int iFXR, int iFSR, double wtFSR, double2 *xflux, double2 *yflux, double2 *zflux, const double *src) {
+		constexpr double r6 = 1. / 6., r24 = 1. / 24;
+		double Len = trackLband(iangle, thisLv);
+		double *areaIF_arr = &areaIF.x;
+		for (int ig = 0; ig < ng; ig++) {
+			double sigT = (*xst)(ig, iFXR);
+			double tau = Len * sigT;
+			//double srcflux = src[ig] / sigT;
+			double srcflux = src[ig] * Len;
+
+			double exptau = exp(-tau);
+			//double exptau = Exponent.ExpFast(-tau);
+
+			double reducedexp[6];
+			reducedexp[0] = exptau;
+			reducedexp[1] = (1. - exptau) / tau;
+			reducedexp[2] = (1. - reducedexp[1]) / tau;
+			reducedexp[3] = (0.5 - reducedexp[2]) / tau;
+			reducedexp[4] = (r6 - reducedexp[3]) / tau;
+			reducedexp[5] = (r24 - reducedexp[4]) / tau;
+
+			double flux0[3][2], flux1[3][2] = { {0.0}, };
+			flux0[0][0] = xflux[ig].x;  flux0[0][1] = xflux[ig].y;
+			if (isY) { flux0[1][0] = yflux[ig].x; flux0[1][1] = yflux[ig].y; }
+
+			// Only for 2D problems
+			double scalar = 0.;
+			for (int m_in = 0; m_in < 2; m_in++) {
+				for (int m_out = 0; m_out < 2; m_out++) {
+					for (int axis = 0; axis < 2; axis++) {
+						int inaxi = axis;
+						double wtband = wtbandP[m_in][m_out](0, inaxi, iangle);
+						flux1[axis][m_out] += flux0[inaxi][m_in] * reducedexp[0] * wtband;
+						if (m_in == 0) flux1[axis][m_out] += srcflux * reducedexp[1] * wtband;
+						if (m_out == 0) {
+							scalar += flux0[inaxi][m_in] * reducedexp[1] * wtband;
+							if (m_in == 0) scalar += srcflux * reducedexp[2] * wtband;
+						}
+
+						inaxi = (axis + 1) % 2;
+						for (int ordexp = 0; ordexp < 1 + m_in + m_out; ordexp++) {
+							wtband = wtbandT[m_in][m_out](ordexp, inaxi, iangle);
+							flux1[axis][m_out] += flux0[inaxi][m_in] * reducedexp[1 + ordexp] * wtband;
+							if (m_in == 0) flux1[axis][m_out] += srcflux * reducedexp[2 + ordexp] * wtband;
+							if (m_out == 0) {
+								scalar += flux0[inaxi][m_in] * reducedexp[2 + ordexp] * wtband;
+								if (m_in == 0) scalar += srcflux * reducedexp[3 + ordexp] * wtband;
+							}
+						}
+					}
+				}
+			}
+
+			for (int axis = 0; axis < 2; axis++) {
+				for (int m = 0; m < 2; m++) {
+					flux1[axis][m] /= areaIF_arr[axis];
+				}
+			}
+			scalar /= VBand[iangle];
+
+			xflux[ig] = make_double2(flux1[0][0], flux1[0][1]);
+			if (isY) yflux[ig] = make_double2(flux1[1][0], flux1[1][1]);
+
+			(*scalarflux)(ig, iFSR) += scalar * wtFSR * QuadSet.weights[iangle];
 		}
 	}
 
 	inline void UpdateFluxIn(double *angflux, double *fluxiny, double *fluxinz) {
-		std::copy(angflux, angflux + ntotGnAng, fluxiny);
-		std::copy(angflux, angflux + ntotGnAng, fluxinz);
+		if (isY) std::copy(angflux, angflux + ntotGnAng, fluxiny);
+		if (isZ) std::copy(angflux, angflux + ntotGnAng, fluxinz);
 	}
 
-	inline void UpperOutFlux_X(double *angfluxUp, double *angfluxLow) {
+	inline void UpperOutFlux_X(int thisLv, int Oct, int3 ids, double *angfluxUp, double *angfluxLow) {
 		for (int i = 0; i < ntotGnAng; i++) {
-			angfluxUp[i] += r9 * angfluxLow[i];
+			angfluxUp[i] += rnxyz.x * angfluxLow[i];
 		}
 	}
 	
-	inline void UpperOutFlux_Y(double *angfluxUp, double *angfluxLow) {
+	inline void UpperOutFlux_Y(int thisLv, int Oct, int3 ids, double *angfluxUp, double *angfluxLow) {
 		for (int j = 0; j < nxyz.x; j++) {
 			for (int i = 0; i < ntotGnAng; i++) {
-				angfluxUp[i] += r9 * angfluxLow[i + j * ntotGnAng];
+				angfluxUp[i] += rnxyz.y * angfluxLow[i + j * ntotGnAng];
 			}
 		}
 	}
 
-	inline void UpperOutFlux_Z(double *angfluxUp, double *angfluxLow) {
+	inline void UpperOutFlux_Z(int thisLv, int Oct, int3 ids, double *angfluxUp, double *angfluxLow) {
 		for (int j = 0; j < nxyz.x * nxyz.y; j++) {
 			for (int i = 0; i < ntotGnAng; i++) {
-				angfluxUp[i] += r9 * angfluxLow[i + j * ntotGnAng];
+				angfluxUp[i] += rnxyz.z * angfluxLow[i + j * ntotGnAng];
 			}
 		}
 	}
 
-	inline void LowerOutFlux_X(double *angfluxLow, double *angfluxUp) {
+	inline void SaveUpperFlux(double *angfluxLow, double *angfluxUp) {
+		std::copy(angfluxUp, angfluxUp + ntotGnAng, angfluxLow);
+		std::fill(angfluxUp, angfluxUp + ntotGnAng, _ZERO);
+	}
+
+	inline void LowerOutFlux_X(int thisLv, int Oct, int3 ids, double *angfluxLow, double *angfluxUp) {
 		std::copy(angfluxUp, angfluxUp + ntotGnAng, angfluxLow);
 	}
 
-	inline void LowerOutFlux_Y(double *angfluxLow, double *angfluxUp) {
-		for (int i = 0; i < nxyz.x; i++) 
-			std::copy(angfluxUp + i * ntotGnAng, angfluxUp + (i + 1)*ntotGnAng, angfluxLow);
-
+	inline void LowerOutFlux_Y(int thisLv, int Oct, int3 ids, double *angfluxLow, double *angfluxUp) {
+		for (int i = 0; i < nxyz.x; i++)
+			std::copy(angfluxUp, angfluxUp + ntotGnAng, angfluxLow + i*ntotGnAng);
 	}
 
-	inline void LowerOutFlux_Z(double *angfluxLow, double *angfluxUp) {
-		for (int i = 0; i < nxyz.x*nxyz.y; i++) 
-			std::copy(angfluxUp + i * ntotGnAng, angfluxUp + (i + 1)*ntotGnAng, angfluxLow);
+	inline void LowerOutFlux_Z(int thisLv, int Oct, int3 ids, double *angfluxLow, double *angfluxUp) {
+		for (int i = 0; i < nxyz.x*nxyz.y; i++)
+			std::copy(angfluxUp, angfluxUp + ntotGnAng, angfluxLow + i * ntotGnAng);
+	}
+
+	inline void UpperOutFlux_X(int thisLv, int Oct, int3 ids, double2 *angfluxUp, double2 *angfluxLow) {
+		double2 wt1;
+		wt1.x = static_cast<double>(2 * ids.y - 1 - nxyz.y)*0.5*rnLxyz[thisLv - 1].y;
+		wt1.y = rnsqrxyz.y;
+		for (int i = 0; i < ntotGnAng; i++) {
+			angfluxUp[i].x += rnxyz.x * angfluxLow[i].x;
+			angfluxUp[i].y += rnxyz.x * (angfluxLow[i].x * wt1.x + angfluxLow[i].y * wt1.y);
+		}
+	}
+
+	inline void UpperOutFlux_Y(int thisLv, int Oct, int3 ids, double2 *angfluxUp, double2 *angfluxLow) {
+		double2 wt1;
+		wt1.x = static_cast<double>(2 * edgeidx[Oct].x + 1 - nxyz.x)*0.5*rnLxyz[thisLv - 1].x;
+		//wt1.x = static_cast<double>(1 - nxyz.x)*0.5*rnLxyz[thisLv - 1].x;
+		wt1.y = rnsqrxyz.x;
+		for (int j = 0; j < nxyz.x; j++) {
+			for (int i = 0; i < ntotGnAng; i++) {
+				angfluxUp[i].x += rnxyz.y * angfluxLow[i + j * ntotGnAng].x;
+				angfluxUp[i].y += rnxyz.y * (angfluxLow[i + j * ntotGnAng].x * wt1.x + angfluxLow[i + j * ntotGnAng].y * wt1.y);
+			}
+			wt1.x += static_cast<double>(dxyz[Oct].x) * rnLxyz[thisLv - 1].x;
+			//wt1.x += rnLxyz[thisLv - 1].x;
+		}
+	}
+
+	inline void UpperOutFlux_Z(int thisLv, int Oct, int3 ids, double2 *angfluxUp, double2 *angfluxLow) {
+		return;
+	}
+
+	inline void SaveUpperFlux(double2 *angfluxLow, double2 *angfluxUp) {
+		std::copy(angfluxUp, angfluxUp + ntotGnAng, angfluxLow);
+		std::fill(angfluxUp, angfluxUp + ntotGnAng, _ZERO2);
+	}
+
+	inline void LowerOutFlux_X(int thisLv, int Oct, int3 ids, double2 *angfluxLow, double2 *angfluxUp) {
+		std::copy(angfluxUp, angfluxUp + ntotGnAng, angfluxLow);
+		double wt1 = 0.5*Lpnxyz[thisLv].y*static_cast<double>(2 * ids.y + 1 - nxyz.y);
+		for (int i = 0; i < ntotGnAng; i++) {
+			angfluxLow[i].x += angfluxUp[i].y*wt1;
+		}
+	}
+
+	inline void LowerOutFlux_Y(int thisLv, int Oct, int3 ids, double2 *angfluxLow, double2 *angfluxUp) {
+		for (int i = 0; i < nxyz.x; i++)
+			std::copy(angfluxUp, angfluxUp + ntotGnAng, angfluxLow + i * ntotGnAng);
+		double wt1 = 0.5*Lpnxyz[thisLv].x*static_cast<double>(2 * edgeidx[Oct].x + 1 - nxyz.x);
+		//double wt1 = 0.5*Lpnxyz[thisLv].x*static_cast<double>(1 - nxyz.x);
+		for (int j = 0; j < nxyz.x; j++) {
+			for (int i = 0; i < ntotGnAng; i++) {
+				angfluxLow[i + j * ntotGnAng].x += angfluxUp[i].y*wt1;
+			}
+			wt1 += static_cast<double>(dxyz[Oct].x) * Lpnxyz[thisLv].x;
+			//wt1 += Lpnxyz[thisLv].x;
+		}
+	}
+
+	inline void LowerOutFlux_Z(int thisLv, int Oct, int3 ids, double2 *angfluxLow, double2 *angfluxUp) {
+		return;
 	}
 
 public:
 	void Initialize(RaySegment &Rays, Boundary &BndFlux, FlatSrc& FSR, const FlatXS& FXR);
 
-	DriverSCMOC(int ng, AngQuadType quadtype, vector<int> quadparameter);
+	DriverSN(int ng, AngQuadType quadtype, vector<int> quadparameter);
 
 	void RaySweep();
+
+	void RaySweepRigorous();
+
+	void RaySweepLinearFlux();
 };
 }

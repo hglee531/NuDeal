@@ -91,7 +91,7 @@ public:
 
 	XSLibrary_t() noexcept = default;
 
-	void ReadMacro(const string& file = "./lib/2group.xslib");
+	void ReadMacro(const string& file = "./lib/c5g7.xslib");
 	void ReadMicro();
 
 public:

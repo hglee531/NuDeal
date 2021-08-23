@@ -125,6 +125,10 @@ public:
 
 	void GetSizeScalars(int3 &N, int &nnode, int &divlevel, double3 &origin, double3 &Width0) const;
 
+	const auto& GetNnode() const { return nnode; }
+
+	const auto& GetDivLevel() const { return divlevel; }
+
 	const auto& GetNnodeLv() const { return nnodeLv; }
 
 	const auto& GetUpperdivmap() const { return upperdivmap; }
@@ -149,9 +153,9 @@ inline void DebugGeomHandle() {
 	UnitSurf Zpln0(SurfType::ZPLN, c_zpln0), Zpln1(SurfType::ZPLN, c_zpln1);
 
 	double c_xpln0[2] = { -1.0, -0.63 };
-	double c_xpln1[2] = { 1.0, 1.89 };
+	double c_xpln1[2] = { 1.0, 0.63 };
 	double c_ypln0[2] = { -1.0, -0.63 };
-	double c_ypln1[2] = { 1.0, 1.89 };
+	double c_ypln1[2] = { 1.0, 0.63 };
 	UnitSurf Xpln0(SurfType::XPLN, c_xpln0), Xpln1(SurfType::XPLN, c_xpln1);
 	UnitSurf Ypln0(SurfType::YPLN, c_ypln0), Ypln1(SurfType::YPLN, c_ypln1);
 
@@ -188,18 +192,20 @@ inline void DebugGeomHandle() {
 	CylComp.Finalize(); CylComp2.Finalize(); CylComp3.Finalize(); CylComp4.Finalize();
 //	CylComp.Relocate(-0.63, 0.63, 0.);	CylComp2.Relocate(-0.63, -0.63, 0.);
 //	CylComp3.Relocate(0.63, 0.63, 0.);	CylComp4.Relocate(0.63, -0.63, 0.);
-	CylComp2.Relocate(1.26, 0., 0.);
-	CylComp3.Relocate(1.26, 1.26, 0.);	CylComp4.Relocate(0., 1.26, 0.);
+	//CylComp2.Relocate(1.26, 0., 0.);
+	//CylComp3.Relocate(1.26, 1.26, 0.);	CylComp4.Relocate(0., 1.26, 0.);
 	GeometryHandler GeoHandle;
-	double origin[3] = { -0.63,-0.63,0 }, L[3] = { 2.52, 2.52,3 };
+	double origin[3] = { -0.63,-0.63, 0 }, L[3] = { 1.26, 1.26, 3 };
+	//double origin[3] = { -0.63,-0.63,0 }, L[3] = { 2.52, 2.52,3 };
 	GeoHandle.SetOrdinates(origin, L);
-	GeoHandle.append(BoxComp);
-	GeoHandle.append(CylComp);
-	GeoHandle.append(CylComp2);
-	GeoHandle.append(CylComp3);
-	GeoHandle.append(CylComp4);
+	//GeoHandle.append(BoxComp);
+	//GeoHandle.append(CylComp);
+	//GeoHandle.append(CylComp2);
+	//GeoHandle.append(CylComp3);
+	//GeoHandle.append(CylComp4);
+	GeoHandle << BoxComp << CylComp;
 	GeoHandle.FinalizeVolumes();
-	GeoHandle.Discretize(Geometry::Dimension::TwoD, 0.2, 0.03);
+	GeoHandle.Discretize(Geometry::Dimension::TwoD, 0.1, 0.005, 1);
 }
 
 }

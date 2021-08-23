@@ -408,15 +408,28 @@ bool GeometryHandler::Discretize(Dimension Dim, double minlen, double maxlen, in
 
 	cout << "Discretize Done!" << endl;
 
-	//PrintDiscInfo();
+	PrintDiscInfo();
+	
+	nnode = 0;
+	vector<double> volval(nvol);
+	std::fill(volval.begin(), volval.end(), 0.0);
+	// Print-out Division Information
+	for (int i = 0; i < divlevel; i++) {
+		for (int j = 0; j < nnodeLv[i]; j++) {
+			if (info[i][j].idvol < 0) continue;
+			nnode++;
+			volval[info[i][j].idvol] += info[i][j].volcm3;
+		}
+	}
+	for (int i = 0; i < nvol; i++) {
+		cout << "Vol " << i << ": " << volval[i] << endl;
+	}
 
 	return true;
 }
 
 void GeometryHandler::PrintDiscInfo() const {
 	int nnode = 0;
-	vector<double> volval(nvol);
-	std::fill(volval.begin(), volval.end(), 0.0);
 	// Print-out Division Information
 	ofstream DiscOut("Discretization.out");
 	for (int i = 0; i < divlevel; i++) {
@@ -427,11 +440,7 @@ void GeometryHandler::PrintDiscInfo() const {
 			DiscOut << info[i][j].midpt.y << ' ';
 			DiscOut << info[i][j].midpt.z << ' ';
 			DiscOut << info[i][j].idvol << endl;
-			volval[info[i][j].idvol] += info[i][j].volcm3;
 		}
-	}
-	for (int i = 0; i < nvol; i++) {
-		cout << "Vol " << i << ": " << volval[i] << endl;
 	}
 }
 

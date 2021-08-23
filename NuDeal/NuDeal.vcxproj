@@ -33,6 +33,7 @@
     <ClInclude Include="header\Preprocessor.h" />
     <ClInclude Include="header\PhysicalDomain.h" />
     <ClInclude Include="header\ShortCharacteristics.h" />
+    <ClInclude Include="header\SolutionDefines.h" />
     <ClInclude Include="header\SolutionDriver.h" />
     <ClInclude Include="header\UnitGeo.h" />
     <ClInclude Include="header\XSLibrary.h" />

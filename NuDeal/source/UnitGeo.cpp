@@ -181,21 +181,21 @@ void UnitSurf::Create(SurfType surftype, double *_coeff, CartPlane cartesianPln)
 			sign = 1.;
 			if (_coeff[2] < 0) sign = -1.;
 			coeff[0] = sign; coeff[1] = sign;
-			coeff[6] = sign * 2. * _coeff[0]; coeff[7] = sign * 2.*_coeff[1];
+			coeff[6] = - sign * 2. * _coeff[0]; coeff[7] = - sign * 2.*_coeff[1];
 			coeff[9] = sign * (sign*_coeff[0] * _coeff[0] + _coeff[1] * _coeff[1] - _coeff[2] * _coeff[2]);
 			break;
 		case CartPlane::YZ:
 			sign = 1.;
 			if (_coeff[2] < 0) sign = -1.;
 			coeff[1] = sign; coeff[2] = sign;
-			coeff[7] = sign * 2. * _coeff[0]; coeff[8] = sign * 2.*_coeff[1];
+			coeff[7] = - sign * 2. * _coeff[0]; coeff[8] =-  sign * 2.*_coeff[1];
 			coeff[9] = sign * (sign*_coeff[0] * _coeff[0] + _coeff[1] * _coeff[1] - _coeff[2] * _coeff[2]);
 			break;
 		case CartPlane::XZ:
 			sign = 1.;
 			if (_coeff[2] < 0) sign = -1.;
 			coeff[0] = sign; coeff[2] = sign;
-			coeff[6] = sign * 2. * _coeff[0]; coeff[8] = sign * 2.*_coeff[1];
+			coeff[6] = - sign * 2. * _coeff[0]; coeff[8] = - sign * 2.*_coeff[1];
 			coeff[9] = sign * (sign*_coeff[0] * _coeff[0] + _coeff[1] * _coeff[1] - _coeff[2] * _coeff[2]);
 			break;
 		}
@@ -845,7 +845,7 @@ void UnitVol::Finalize() {
 		// Exception
 	}
 	else {
-		vol = CalVolume();
+		vol = CalVolume(50,50,50);
 	}
 }
 

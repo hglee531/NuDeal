@@ -247,7 +247,8 @@ void RayTracingDomain::RecursiveTrace(array<queue<int2>, 8> &Qsweeploop, int Lv,
 				if (lowid0 < lowid1) {
 					Qsweeploop[Oct].push(make_int2(iternode, 0));
 					nloop[Oct]++;
-					RecursiveTrace(Qsweeploop, Lv + 1, lowid0 + edgeid[Oct], iternode, Oct);
+					RecursiveTrace(Qsweeploop, Lv + 1, lowid0, iternode, Oct);
+					//RecursiveTrace(Qsweeploop, Lv + 1, lowid0 + edgeid[Oct], iternode, Oct);
 				}
 				else {
 					sweepnodes(iternode, Oct) = serialdivmap[Lv][thisid];
@@ -315,7 +316,7 @@ void RayTracingDomain::CreateTracingDomain() {
 		if (dz > 0) { zs0[0] = 0; zs0[1] = Nz; zs[0] = 0; zs[1] = nz; }
 		else { zs0[0] = Nz - 1; zs0[1] = -1; zs[0] = nz - 1; zs[1] = -1; }
 
-		edgeid[Oct] = xs[0] + (ys[0] + zs[0] * Ny) * Nx;
+		edgeid[Oct] = xs[0] + (ys[0] + zs[0] * ny) * nx;
 
 		range0[Oct][0] = make_int3(xs0[0], ys0[0], zs0[0]); range[Oct][0] = make_int3(xs[0], ys[0], zs[0]);
 		range0[Oct][1] = make_int3(xs0[1], ys0[1], zs0[1]); range[Oct][1] = make_int3(xs[1], ys[1], zs[1]);
@@ -332,7 +333,7 @@ void RayTracingDomain::CreateTracingDomain() {
 		}
 	}
 
-	PrintTracingInfo();
+	//PrintTracingInfo();
 }
 
 void RayTracingDomain::PrintTracingInfo() {
@@ -437,7 +438,6 @@ CompiledDomain::CompiledDomain(int3 block, const BaseDomain &rhs) {
 				int id = id0, ActiveLv = 0;
 
 				stack<int> ids;
-				ids.push(id0);
 
 				while (ActiveLv > -1) {
 					int lowid0 = 0, lowid1 = 0;
@@ -462,20 +462,33 @@ CompiledDomain::CompiledDomain(int3 block, const BaseDomain &rhs) {
 						compileInfo[nblocks + idInBlock].volsum += volcm3;
 
 						// Check if this level of divisions are all sweeped
-						if (ActiveLv > 0) {
+						while (ActiveLv > 0) {
 							int upid = ids.top();
 							int uplowid1 = lowerdivmap[ActiveLv - 1][upid + 1];
 							// Move to next id (id++), and compare the end of points in this division
 							if (uplowid1 == ++id) {
 								// If it was the end, go upward and move to upid++
-								ids.pop(); id = ++upid;
+								ids.pop(); id = upid;
 								ActiveLv--;
 							}
+							else break;
 						}
+						//if (ActiveLv > 0) {
+						//	int upid = ids.top();
+						//	int uplowid1 = lowerdivmap[ActiveLv - 1][upid + 1];
+						//	// Move to next id (id++), and compare the end of points in this division
+						//	if (uplowid1 == ++id) {
+						//		// If it was the end, go upward and move to upid++
+						//		ids.pop(); id = upid+1;
+						//		ActiveLv--;
+						//	}
+						//}
 						if (ActiveLv == 0) break;
 					}
 					// Go downward further
-					else { ids.push(id);	ActiveLv++;	id = lowid0; }
+					else { 
+						ids.push(id);	ActiveLv++;	id = lowid0; 
+					}
 				}
 			}	}	}
 			nblocks += ivolsInBlock.size();
@@ -575,20 +588,20 @@ void CompiledDomain::PrintCompileInfo(string filename) const {
 void FluxBoundary::Initialize(int ng, int nangle_oct) {
 	this->ng = ng; this->nangle_oct = nangle_oct;
 	xbndflux.Create(ng, nangle_oct, Ny*Nz, 8);
-	ybndflux.Create(ng, nangle_oct, Nx*Nz, 8);
-	zbndflux.Create(ng, nangle_oct, Nx*Ny, 8);
+	if (mode != Dimension::OneD) ybndflux.Create(ng, nangle_oct, Nx*Nz, 8);
+	if (mode == Dimension::ThreeD) zbndflux.Create(ng, nangle_oct, Nx*Ny, 8);
 }
 
 void  FluxBoundary::VaccumFlux() {
-	std::fill(xbndflux.begin(), xbndflux.end(), 0.0);
-	std::fill(ybndflux.begin(), ybndflux.end(), 0.0);
-	std::fill(zbndflux.begin(), zbndflux.end(), 0.0);
+	std::fill(xbndflux.begin(), xbndflux.end(), zerophi);
+	if (mode != Dimension::OneD) std::fill(ybndflux.begin(), ybndflux.end(), zerophi);
+	if (mode == Dimension::ThreeD) std::fill(zbndflux.begin(), zbndflux.end(), zerophi);
 }
 
 void  FluxBoundary::InitBndFluxUnity() {
-	std::fill(xbndflux.begin(), xbndflux.end(), 1.0);
-	std::fill(ybndflux.begin(), ybndflux.end(), 1.0);
-	std::fill(zbndflux.begin(), zbndflux.end(), 1.0);
+	std::fill(xbndflux.begin(), xbndflux.end(), unityphi);
+	if (mode != Dimension::OneD) std::fill(ybndflux.begin(), ybndflux.end(), unityphi);
+	if (mode == Dimension::ThreeD) std::fill(zbndflux.begin(), zbndflux.end(), unityphi);
 }
 
 void FluxBoundary::UpdateBoundary(int leftcond, int rightcond) {
@@ -597,12 +610,17 @@ void FluxBoundary::UpdateBoundary(int leftcond, int rightcond) {
 		return;
 	}
 
+	bool isY = mode != Dimension::OneD, isZ = mode == Dimension::ThreeD;
+
 	bool isxl, isxr, isyl, isyr, iszl, iszr;
 	isxl = leftcond / 100; isxr = rightcond / 100;
 	isyl = leftcond / 10 % 10; isyr = rightcond / 10 % 10;
 	iszl = leftcond % 10; iszr = rightcond % 10;
+
+	isyl = isyl && isY; isyr = isyr && isY;
+	iszl = iszl && isZ; iszr = iszr && isZ;
 		
-	Array<double> bufx, bufy, bufz;
+	Array<realphi> bufx, bufy, bufz;
 	bufx = xbndflux; bufy = ybndflux; bufz = zbndflux;
 	
 	if (isxl) {

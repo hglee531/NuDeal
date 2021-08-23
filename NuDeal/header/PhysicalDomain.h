@@ -1,5 +1,6 @@
 #pragma once
 #include "Defines.h"
+#include "SolutionDefines.h"
 #include "UnitGeo.h"
 #include "Library.h"
 #include "GeoHandle.h"
@@ -173,12 +174,16 @@ public:
 };
 
 class FluxBoundary {
+public:
+	using Dimension = Geometry::Dimension;
+
 private:
+	Dimension mode;
 	int ng, nangle_oct;
 	int Nx, Ny, Nz;
-	Array<double> xbndflux, ybndflux, zbndflux;
+	Array<realphi> xbndflux, ybndflux, zbndflux;
 public:
-	FluxBoundary(int Nx, int Ny, int Nz) { this->Nx = Nx; this->Ny = Ny; this->Nz = Nz; }
+	FluxBoundary(Dimension mode, int Nx, int Ny, int Nz) { this->mode = mode; this->Nx = Nx; this->Ny = Ny; this->Nz = Nz; }
 
 	void Initialize(int ng, int nangle_oct);
 
